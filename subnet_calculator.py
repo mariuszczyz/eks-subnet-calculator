@@ -45,24 +45,6 @@ def calculate_control_plane_size() -> int:
     return 28
 
 
-def calculate_service_cidr(vpc_cidr: str) -> str:
-    """Calculate a non-overlapping service CIDR."""
-    vpc = parse_cidr(vpc_cidr)
-    for cidr in ["10.100.0.0/16", "172.20.0.0/16", "192.168.0.0/16"]:
-        if not vpc.overlaps(ipaddress.IPv4Network(cidr, strict=False)):
-            return cidr
-    return "10.100.0.0/16"
-
-
-def calculate_pod_cidr(vpc_cidr: str) -> str:
-    """Calculate a non-overlapping pod CIDR."""
-    vpc = parse_cidr(vpc_cidr)
-    for cidr in ["10.200.0.0/16", "172.21.0.0/16", "192.169.0.0/16"]:
-        if not vpc.overlaps(ipaddress.IPv4Network(cidr, strict=False)):
-            return cidr
-    return "10.200.0.0/16"
-
-
 def calculate_subnets(vpc_cidr: str, availability_zones: int,
                       node_count: int, pods_per_node: int,
                       eks_version: float,

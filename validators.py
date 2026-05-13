@@ -62,7 +62,7 @@ def is_valid_pods_per_node(count: int) -> Tuple[bool, Optional[str]]:
 
 
 def is_valid_eks_version(version: float) -> Tuple[bool, Optional[str]]:
-    valid_versions = [1.25, 1.26, 1.27, 1.28, 1.29]
+    valid_versions = [1.28, 1.29, 1.30, 1.31, 1.32]
     if version not in valid_versions:
         return False, f"Invalid EKS version. Supported: {', '.join(map(str, valid_versions))}"
     return True, None

@@ -131,42 +131,47 @@ class TestIsValidPodCidr:
 
 class TestIsValidEksVersion:
     def test_valid_versions(self):
-        for version in [1.25, 1.26, 1.27, 1.28, 1.29]:
+        for version in [1.28, 1.29, 1.30, 1.31, 1.32]:
             is_valid, error = is_valid_eks_version(version)
-            assert is_valid is True
+            assert is_valid is True, f"Expected {version} to be valid"
 
-    def test_invalid_version(self):
-        is_valid, error = is_valid_eks_version(1.24)
+    def test_eol_versions_rejected(self):
+        for version in [1.24, 1.25, 1.26, 1.27]:
+            is_valid, error = is_valid_eks_version(version)
+            assert is_valid is False, f"Expected {version} to be rejected (EOL)"
+
+    def test_future_version_rejected(self):
+        is_valid, error = is_valid_eks_version(1.99)
         assert is_valid is False
 
 
 class TestValidateClusterConfig:
     def test_valid_config(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 110, 1.27)
+        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 110, 1.28)
         assert is_valid is True
 
     def test_invalid_vpc(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/29", 2, 10, 110, 1.27)
+        is_valid, error = validate_cluster_config("10.0.0.0/29", 2, 10, 110, 1.28)
         assert is_valid is False
 
     def test_invalid_az(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/16", 0, 10, 110, 1.27)
+        is_valid, error = validate_cluster_config("10.0.0.0/16", 0, 10, 110, 1.28)
         assert is_valid is False
 
     def test_invalid_nodes(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 0, 110, 1.27)
+        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 0, 110, 1.28)
         assert is_valid is False
 
     def test_invalid_pods(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 0, 1.27)
+        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 0, 1.28)
         assert is_valid is False
 
     def test_invalid_pod_cidr(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="10.0.0.0/16")
+        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 110, 1.28, pod_cidr="10.0.0.0/16")
         assert is_valid is False
 
     def test_valid_custom_pod_cidr(self):
-        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="100.64.0.0/10")
+        is_valid, error = validate_cluster_config("10.0.0.0/16", 2, 10, 110, 1.28, pod_cidr="100.64.0.0/10")
         assert is_valid is True
 
     def test_invalid_eks(self):

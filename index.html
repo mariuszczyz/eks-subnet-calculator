@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EKS Subnet Calculator</title>
+    <style>
+        :root {
+            --primary: #2563eb; --primary-hover: #1d4ed8;
+            --bg: #f8fafc; --card: #ffffff; --text: #1e293b;
+            --text-secondary: #64748b; --border: #e2e8f0;
+            --success: #16a34a; --warning: #d97706; --error: #dc2626;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        header { margin-bottom: 32px; }
+        h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .subtitle { color: var(--text-secondary); }
+        .main { display: grid; grid-template-columns: 380px 1fr; gap: 24px; }
+        @media (max-width: 1024px) { .main { grid-template-columns: 1fr; } }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .form-group .hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .btn { width: 100%; padding: 12px 16px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn:disabled { background: var(--text-secondary); cursor: not-allowed; }
+        .error-banner { background: #fef2f2; border: 1px solid var(--error); color: var(--error); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: none; }
+        .error-banner.show { display: block; }
+        .error-banner strong { display: block; margin-bottom: 4px; }
+        .results-section { display: none; }
+        .results-section.show { display: block; }
+        .subnet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .subnet-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .subnet-item h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .subnet-item .cidr { font-size: 20px; font-weight: 700; color: var(--primary); font-family: 'Monaco', 'Courier New', monospace; }
+        .subnet-item .details { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .validation-list { list-style: none; margin-top: 16px; }
+        .validation-list li { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 14px; }
+        .validation-list li.pass { color: var(--success); }
+        .validation-list li.fail { color: var(--error); }
+        .tree-view { margin-top: 20px; }
+        .tree-node { margin: 4px 0; }
+        .tree-node-content { padding: 8px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+        .tree-node-content:hover { border-color: var(--primary); }
+        .tree-node-label { font-size: 14px; font-weight: 500; color: var(--text); }
+        .tree-node-children { margin-left: 24px; }
+        .color-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .color-public { background: #3b82f6; }
+        .color-private { background: #8b5cf6; }
+        .color-service { background: #f59e0b; }
+        .color-pod { background: #10b981; }
+        .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; padding: 12px; background: var(--bg); border-radius: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .summary-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .summary-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .summary-item { background: var(--bg); padding: 12px; border-radius: 6px; }
+        .summary-item .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
+        .summary-item .value { font-size: 18px; font-weight: 700; color: var(--text); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>EKS Subnet Calculator</h1>
+            <p class="subtitle">Plan CIDR subnet allocations for AWS EKS clusters</p>
+        </header>
+        <div class="main">
+            <div class="card">
+                <h2>Cluster Configuration</h2>
+                <div id="errorBanner" class="error-banner">
+                    <strong>Error</strong>
+                    <span id="errorMessage"></span>
+                </div>
+                <form id="subnetForm">
+                    <div class="form-group">
+                        <label for="vpcCidr">VPC CIDR</label>
+                        <input type="text" id="vpcCidr" placeholder="e.g., 10.0.0.0/16" value="10.0.0.0/16">
+                        <div class="hint">Your VPC's IPv4 CIDR block</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="availabilityZones">Availability Zones</label>
+                        <select id="availabilityZones">
+                            <option value="2">2 AZs (Recommended)</option>
+                            <option value="3">3 AZs</option>
+                            <option value="1">1 AZ</option>
+                            <option value="4">4 AZs</option>
+                            <option value="5">5 AZs</option>
+                            <option value="6">6 AZs</option>
+                        </select>
+                        <div class="hint">Number of AZs for high availability</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="nodeCount">Total Node Count</label>
+                        <input type="number" id="nodeCount" placeholder="e.g., 10" value="10" min="1">
+                        <div class="hint">Total estimated number of worker nodes across all AZs</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="podsPerNode">Pods Per Node</label>
+                        <input type="number" id="podsPerNode" placeholder="e.g., 110" value="110" min="1">
+                        <div class="hint">Maximum number of pods scheduled on each node</div>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="customPodCidr" style="width: auto; margin-right: 8px;">
+                            Use custom Pod CIDR
+                        </label>
+                        <input type="text" id="podCidrInput" placeholder="e.g., 100.64.0.0/10" value="" style="display: none; margin-top: 8px;">
+                        <div class="hint" id="podCidrHint">Auto-generated from node count and pods per node</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eksVersion">EKS Version</label>
+                        <select id="eksVersion">
+                            <option value="1.29">1.29 (Latest)</option>
+                            <option value="1.28">1.28</option>
+                            <option value="1.27" selected>1.27</option>
+                            <option value="1.26">1.26</option>
+                            <option value="1.25">1.25</option>
+                        </select>
+                        <div class="hint">Kubernetes version for the cluster</div>
+                    </div>
+                    <button type="button" id="calculateBtn" class="btn">Calculate Subnets</button>
+                </form>
+            </div>
+            <div>
+                <div class="card results-section" id="resultsCard">
+                    <h2>Subnet Plan</h2>
+                    <div class="legend">
+                        <div class="legend-item"><span class="color-indicator color-public"></span>Public</div>
+                        <div class="legend-item"><span class="color-indicator color-private"></span>Private</div>
+                        <div class="legend-item"><span class="color-indicator color-service"></span>Service</div>
+                        <div class="legend-item"><span class="color-indicator color-pod"></span>Pod</div>
+                    </div>
+                    <div class="summary-box">
+                        <h3>Summary</h3>
+                        <div class="summary-grid">
+                            <div class="summary-item"><div class="label">Total Subnets</div><div class="value" id="summaryTotalSubnets">-</div></div>
+                            <div class="summary-item"><div class="label">Total IPs</div><div class="value" id="summaryTotalIps">-</div></div>
+                            <div class="summary-item"><div class="label">Available IPs</div><div class="value" id="summaryAvailableIps">-</div></div>
+                            <div class="summary-item"><div class="label">VPC Utilization</div><div class="value" id="summaryVpcUtilization">-</div></div>
+                        </div>
+                    </div>
+                    <div class="subnet-grid" id="subnetGrid"></div>
+                    <h3>CIDR Hierarchy</h3>
+                    <div class="tree-view" id="treeView"></div>
+                    <h3>AWS Best Practices Validation</h3>
+                    <ul class="validation-list" id="validationList"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function showError(msg) { document.getElementById('errorMessage').textContent = msg; document.getElementById('errorBanner').classList.add('show'); }
+        function hideError() { document.getElementById('errorBanner').classList.remove('show'); }
+        async function calculateSubnets() {
+            hideError();
+            const vpcCidr = document.getElementById('vpcCidr').value.trim();
+            const azCount = parseInt(document.getElementById('availabilityZones').value, 10);
+            const nodeCount = parseInt(document.getElementById('nodeCount').value, 10);
+            const podsPerNode = parseInt(document.getElementById('podsPerNode').value, 10);
+            const useCustomPodCidr = document.getElementById('customPodCidr').checked;
+            const podCidr = useCustomPodCidr ? document.getElementById('podCidrInput').value.trim() : null;
+            const eksVersion = parseFloat(document.getElementById('eksVersion').value);
+            if (!vpcCidr) { showError('Please enter a VPC CIDR'); return; }
+            if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(vpcCidr)) {
+                showError('Invalid CIDR format. Use format like 10.0.0.0/16'); return;
+            }
+            const [_, prefix] = vpcCidr.split('/');
+            if (parseInt(prefix) > 28) { showError('VPC CIDR must be /28 or smaller'); return; }
+            if (useCustomPodCidr && !podCidr) { showError('Please enter a custom Pod CIDR'); return; }
+            if (useCustomPodCidr && !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(podCidr)) {
+                showError('Invalid Pod CIDR format. Use format like 100.64.0.0/10'); return;
+            }
+            try {
+                document.getElementById('calculateBtn').disabled = true;
+                document.getElementById('calculateBtn').textContent = 'Calculating...';
+                const response = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vpc_cidr: vpcCidr, availability_zones: azCount, node_count: nodeCount, pods_per_node: podsPerNode, pod_cidr: podCidr || undefined, eks_version: eksVersion })
+                });
+                const data = await response.json();
+                if (!response.ok) { showError(data.error || 'Failed to calculate subnets'); return; }
+                renderResults(data);
+                document.getElementById('resultsCard').classList.add('results-section', 'show');
+            } catch (error) { showError('Network error: ' + error.message); }
+            finally {
+                document.getElementById('calculateBtn').disabled = false;
+                document.getElementById('calculateBtn').textContent = 'Calculate Subnets';
+            }
+        }
+        function renderResults(data) {
+            const subnetGrid = document.getElementById('subnetGrid');
+            subnetGrid.innerHTML = data.subnets.map(s => {
+                const customBadge = s.custom ? ' <span style="font-size: 10px; background: #3b82f6; color: white; padding: 1px 6px; border-radius: 3px; margin-left: 4px;">Custom</span>' : '';
+                return `<div class="subnet-item"><h3><span class="color-indicator color-${s.purpose}"></span>${s.name}${customBadge}</h3>
+                <div class="cidr">${s.cidr}</div><div class="details">${s.total_ips} IPs • ${s.available_ips} available</div></div>`;
+            }).join('');
+            const grouped = {};
+            data.subnets.forEach(s => { if (!grouped[s.purpose]) grouped[s.purpose] = []; grouped[s.purpose].push(s); });
+            let treeHTML = '';
+            for (const [purpose, items] of Object.entries(grouped)) {
+                treeHTML += `<div class="tree-node"><div class="tree-node-content"><span class="color-indicator color-${purpose}"></span><span class="tree-node-label">${purpose.toUpperCase()} (${items.length} AZs)</span></div>`;
+                items.forEach(item => { treeHTML += `<div class="tree-node-children"><div class="tree-node-content"><span class="tree-node-label">${item.name}: ${item.cidr}</span></div></div>`; });
+                treeHTML += '</div>';
+            }
+            document.getElementById('treeView').innerHTML = treeHTML;
+            document.getElementById('validationList').innerHTML = data.validation.map(v =>
+                `<li class="${v.passed ? 'pass' : 'fail'}"><span class="icon">${v.passed ? '✓' : '✗'}</span>${v.message}</li>`).join('');
+            const totalIps = data.subnets.reduce((sum, s) => sum + s.total_ips, 0);
+            const availableIps = data.subnets.reduce((sum, s) => sum + s.available_ips, 0);
+            document.getElementById('summaryTotalSubnets').textContent = data.subnets.length;
+            document.getElementById('summaryTotalIps').textContent = totalIps.toLocaleString();
+            document.getElementById('summaryAvailableIps').textContent = availableIps.toLocaleString();
+            document.getElementById('summaryVpcUtilization').textContent = data.summary.vpc_utilization_percent + '%';
+        }
+        document.getElementById('calculateBtn').addEventListener('click', calculateSubnets);
+        document.getElementById('subnetForm').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); calculateSubnets(); }
+        });
+        document.getElementById('customPodCidr').addEventListener('change', function() {
+            const input = document.getElementById('podCidrInput');
+            const hint = document.getElementById('podCidrHint');
+            if (this.checked) {
+                input.style.display = 'block';
+                input.value = '';
+                input.placeholder = 'e.g., 100.64.0.0/10';
+                hint.textContent = 'Enter a CIDR range outside the VPC (e.g., 100.64.0.0/10 for CG-NAT)';
+            } else {
+                input.style.display = 'none';
+                hint.textContent = 'Auto-generated from node count and pods per node';
+            }
+        });
+    </script>
+</body>
+</html>

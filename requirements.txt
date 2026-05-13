@@ -1,0 +1,4 @@
+# EKS Subnet Calculator - Requirements
+flask>=2.0.0
+pytest>=7.0.0
+gunicorn>=21.0.0

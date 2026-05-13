@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Integration tests for the Flask API."""
 
-import pytest
-
-
 VALID_PAYLOAD = {
     "vpc_cidr": "10.0.0.0/16",
     "availability_zones": 2,

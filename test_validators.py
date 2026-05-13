@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Unit tests for validators module."""
 
-import pytest
 from validators import (
     is_valid_cidr,
     is_valid_vpc_cidr,

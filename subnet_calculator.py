@@ -2,7 +2,7 @@
 """EKS Subnet Calculator - Core calculation logic."""
 
 import ipaddress
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 
 def parse_cidr(cidr: str) -> ipaddress.IPv4Network:

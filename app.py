@@ -16,18 +16,36 @@ def index():
 @app.route('/api/calculate', methods=['POST'])
 def calculate():
     try:
+        vpc_cidr = request.json.get('vpc_cidr')
+        availability_zones = request.json.get('availability_zones', 2)
+        node_count = request.json.get('node_count', 10)
+        pods_per_node = request.json.get('pods_per_node', 110)
+        eks_version = request.json.get('eks_version', 1.28)
+        pod_cidr = request.json.get('pod_cidr')
+
+        is_valid, error = validators.validate_cluster_config(
+            vpc_cidr=vpc_cidr,
+            az_count=availability_zones,
+            node_count=node_count,
+            pods_per_node=pods_per_node,
+            eks_version=eks_version,
+            pod_cidr=pod_cidr,
+        )
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
         data = subnet_calculator.calculate_subnets(
-            vpc_cidr=request.json.get('vpc_cidr'),
-            availability_zones=request.json.get('availability_zones', 2),
-            node_count=request.json.get('node_count', 10),
-            pods_per_node=request.json.get('pods_per_node', 110),
-            eks_version=request.json.get('eks_version', 1.27),
-            pod_cidr=request.json.get('pod_cidr')
+            vpc_cidr=vpc_cidr,
+            availability_zones=availability_zones,
+            node_count=node_count,
+            pods_per_node=pods_per_node,
+            eks_version=eks_version,
+            pod_cidr=pod_cidr,
         )
         return jsonify(data)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
-    except Exception as e:
+    except Exception:
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -39,7 +57,7 @@ def validate():
             az_count=request.json.get('availability_zones', 2),
             node_count=request.json.get('node_count', 10),
             pods_per_node=request.json.get('pods_per_node', 110),
-            eks_version=request.json.get('eks_version', 1.27),
+            eks_version=request.json.get('eks_version', 1.28),
             pod_cidr=request.json.get('pod_cidr')
         )
         return jsonify({'valid': is_valid, 'error': error})

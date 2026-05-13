@@ -76,30 +76,30 @@ class TestCalculateControlPlaneSize:
 
 class TestCalculateSubnets:
     def test_basic_calculation(self):
-        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28)
         assert result["vpc_cidr"] == "10.0.0.0/16"
         assert result["availability_zones"] == 2
         assert result["pods_per_node"] == 110
         assert len(result["subnets"]) == 8
 
     def test_three_azs(self):
-        result = calculate_subnets("10.0.0.0/12", 3, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/12", 3, 10, 110, 1.28)
         assert result["availability_zones"] == 3
         assert len(result["subnets"]) == 11
 
     def test_insufficient_space(self):
         with pytest.raises(ValueError):
-            calculate_subnets("10.0.0.0/28", 2, 10, 110, 1.27)
+            calculate_subnets("10.0.0.0/28", 2, 10, 110, 1.28)
 
     def test_validation_results(self):
-        result = calculate_subnets("10.0.0.0/12", 2, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/12", 2, 10, 110, 1.28)
         assert "validation" in result
         assert len(result["validation"]) > 0
         for v in result["validation"]:
             assert v["passed"] is True
 
     def test_summary(self):
-        result = calculate_subnets("10.0.0.0/12", 2, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/12", 2, 10, 110, 1.28)
         assert "summary" in result
         assert result["summary"]["total_subnets"] == 8
         assert "total_ips" in result["summary"]
@@ -114,12 +114,12 @@ class TestCalculateSubnets:
 
 class TestEdgeCases:
     def test_single_az(self):
-        result = calculate_subnets("10.0.0.0/16", 1, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/16", 1, 10, 110, 1.28)
         assert result["availability_zones"] == 1
         assert len(result["subnets"]) == 5
 
     def test_max_azs(self):
-        result = calculate_subnets("10.0.0.0/12", 6, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/12", 6, 10, 110, 1.28)
         assert result["availability_zones"] == 6
         assert len(result["subnets"]) == 20
 
@@ -130,33 +130,33 @@ class TestEdgeCases:
 
 class TestCustomPodCidr:
     def test_custom_pod_cidr_success(self):
-        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="100.64.0.0/10")
+        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28, pod_cidr="100.64.0.0/10")
         pod_subnet = next(s for s in result["subnets"] if s["purpose"] == "pod")
         assert pod_subnet["cidr"] == "100.64.0.0/10"
         assert pod_subnet["custom"] is True
 
     def test_custom_pod_cidr_not_in_vpc(self):
-        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="100.64.0.0/10")
+        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28, pod_cidr="100.64.0.0/10")
         # Pod CIDR should not consume VPC space (custom pod CIDR is external)
         assert result["summary"]["vpc_utilization_percent"] < 50
 
     def test_custom_pod_cidr_too_small(self):
         with pytest.raises(ValueError):
-            calculate_subnets("10.0.0.0/16", 2, 1000, 110, 1.27, pod_cidr="10.200.0.0/16")
+            calculate_subnets("10.0.0.0/16", 2, 1000, 110, 1.28, pod_cidr="10.200.0.0/16")
 
     def test_custom_pod_cidr_overlaps_vpc(self):
         with pytest.raises(ValueError):
-            calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="10.0.0.0/16")
+            calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28, pod_cidr="10.0.0.0/16")
 
     def test_auto_pod_cidr_without_custom(self):
-        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28)
         pod_subnet = next(s for s in result["subnets"] if s["purpose"] == "pod")
         assert pod_subnet["custom"] is False
 
     def test_custom_pod_cidr_in_response(self):
-        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="100.64.0.0/10")
+        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28, pod_cidr="100.64.0.0/10")
         assert result["pod_cidr"] == "100.64.0.0/10"
 
     def test_auto_pod_cidr_in_response(self):
-        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27)
+        result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.28)
         assert result["pod_cidr"] is None

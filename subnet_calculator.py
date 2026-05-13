@@ -13,16 +13,15 @@ def parse_cidr(cidr: str) -> ipaddress.IPv4Network:
         raise ValueError(f"Invalid CIDR format: {cidr}") from e
 
 
-def calculate_subnet_size(node_count: int, pods_per_node: int, eks_version: float) -> int:
+def calculate_subnet_size(node_count: int, pods_per_node: int, availability_zones: int) -> int:
     """
-    Calculate the required per-AZ subnet size based on node count, pods per node, and EKS version.
+    Calculate the required per-AZ subnet size based on node and pod counts.
 
-    Returns the prefix length (e.g., 24 for /24 subnet).
-    Each AZ gets a subnet sized for its share of nodes.
+    Returns the prefix length (e.g., 23 for /23 subnet).
     """
-    # Each AZ handles node_count / availability_zones nodes.
-    # Per-AZ IPs = (nodes/az) * pods_per_node + (nodes/az) * 16 + 128
-    ips_per_az = node_count * pods_per_node / 6 + node_count * 16 / 6 + 128  # /6 for 6 AZs max
+    if availability_zones < 1:
+        raise ValueError("availability_zones must be at least 1")
+    ips_per_az = node_count * pods_per_node / availability_zones + node_count * 16 / availability_zones + 128
 
     for prefix in range(24, 8, -1):
         subnet_size = 2 ** (32 - prefix)
@@ -93,7 +92,7 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             f"Need at least /{min_prefix} or larger."
         )
 
-    subnet_size = calculate_subnet_size(node_count, pods_per_node, eks_version)
+    subnet_size = calculate_subnet_size(node_count, pods_per_node, availability_zones)
     subnet_ip_count = 2 ** (32 - subnet_size)
 
     subnets = []

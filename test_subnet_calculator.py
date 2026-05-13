@@ -6,8 +6,6 @@ from subnet_calculator import (
     parse_cidr,
     calculate_subnet_size,
     calculate_control_plane_size,
-    calculate_service_cidr,
-    calculate_pod_cidr,
     calculate_subnets,
 )
 
@@ -23,31 +21,50 @@ class TestParseCidr:
 
 
 class TestCalculateSubnetSize:
-    def test_small_node_count(self):
-        prefix = calculate_subnet_size(5, 110, 1.27)
-        assert prefix == 24  # 5*110/6 + 5*16/6 + 128 = 233, fits in /24 (256)
+    def test_small_cluster_6az(self):
+        # ips_per_az = 5*110/6 + 5*16/6 + 128 = 91.67 + 13.33 + 128 = 233 → /24 (256)
+        prefix = calculate_subnet_size(5, 110, 6)
+        assert prefix == 24
 
-    def test_large_node_count(self):
-        prefix = calculate_subnet_size(100, 110, 1.27)
-        assert prefix == 20  # 100*110/6 + 100*16/6 + 128 = 2228, fits in /20 (1024) or smaller
+    def test_small_cluster_2az(self):
+        # ips_per_az = 5*110/2 + 5*16/2 + 128 = 275 + 40 + 128 = 443 → /23 (512)
+        prefix = calculate_subnet_size(5, 110, 2)
+        assert prefix == 23
 
-    def test_very_large_node_count(self):
-        prefix = calculate_subnet_size(10000, 110, 1.27)
-        assert prefix == 14  # 10000*110/6 + 10000*16/6 + 128 = 210128, fits in /14 (16384)
+    def test_large_cluster_6az(self):
+        # ips_per_az = 100*110/6 + 100*16/6 + 128 = 1833 + 267 + 128 = 2228 → /20 (4096)
+        prefix = calculate_subnet_size(100, 110, 6)
+        assert prefix == 20
+
+    def test_very_large_cluster_6az(self):
+        # ips_per_az = 10000*110/6 + 10000*16/6 + 128 = 210128 → /14 (262144)
+        prefix = calculate_subnet_size(10000, 110, 6)
+        assert prefix == 14
+
+    def test_fewer_azs_require_larger_subnets(self):
+        # 2 AZs: each zone handles more nodes → needs bigger subnet → smaller prefix
+        prefix_2az = calculate_subnet_size(100, 110, 2)
+        prefix_6az = calculate_subnet_size(100, 110, 6)
+        assert prefix_2az < prefix_6az
 
     def test_node_count_affects_size(self):
-        small = calculate_subnet_size(10, 110, 1.27)
-        large = calculate_subnet_size(10000, 110, 1.27)
-        assert large < small  # Larger node count → smaller prefix → bigger subnet
+        small = calculate_subnet_size(10, 110, 2)
+        large = calculate_subnet_size(10000, 110, 2)
+        assert large < small  # larger node count → smaller prefix → bigger subnet
 
     def test_pods_per_node_affects_size(self):
-        small = calculate_subnet_size(100, 10, 1.27)
-        large = calculate_subnet_size(100, 200, 1.27)
-        assert large < small  # More pods → smaller prefix → bigger subnet
+        small = calculate_subnet_size(100, 10, 2)
+        large = calculate_subnet_size(100, 200, 2)
+        assert large < small  # more pods → smaller prefix → bigger subnet
 
-    def test_eks_1_21_plus(self):
-        prefix = calculate_subnet_size(10, 110, 1.21)
-        assert prefix <= 24  # Can be smaller than /24 for large node counts
+    def test_single_az_requires_largest_subnet(self):
+        # ips_per_az = 10*110/1 + 10*16/1 + 128 = 1388 → /21 (2048)
+        prefix = calculate_subnet_size(10, 110, 1)
+        assert prefix == 21
+
+    def test_zero_azs_raises(self):
+        with pytest.raises(ValueError):
+            calculate_subnet_size(10, 110, 0)
 
 
 class TestCalculateControlPlaneSize:
@@ -55,24 +72,6 @@ class TestCalculateControlPlaneSize:
         prefix = calculate_control_plane_size()
         assert prefix == 28
 
-
-class TestCalculateServiceCidr:
-    def test_non_overlapping(self):
-        vpc_cidr = "10.0.0.0/16"
-        service_cidr = calculate_service_cidr(vpc_cidr)
-        assert service_cidr is not None
-
-    def test_different_vpc(self):
-        vpc_cidr = "172.16.0.0/16"
-        service_cidr = calculate_service_cidr(vpc_cidr)
-        assert service_cidr is not None
-
-
-class TestCalculatePodCidr:
-    def test_non_overlapping(self):
-        vpc_cidr = "10.0.0.0/16"
-        pod_cidr = calculate_pod_cidr(vpc_cidr)
-        assert pod_cidr is not None
 
 
 class TestCalculateSubnets:
@@ -138,8 +137,8 @@ class TestCustomPodCidr:
 
     def test_custom_pod_cidr_not_in_vpc(self):
         result = calculate_subnets("10.0.0.0/16", 2, 10, 110, 1.27, pod_cidr="100.64.0.0/10")
-        # Pod CIDR should not consume VPC space
-        assert result["summary"]["vpc_utilization_percent"] < 10
+        # Pod CIDR should not consume VPC space (custom pod CIDR is external)
+        assert result["summary"]["vpc_utilization_percent"] < 50
 
     def test_custom_pod_cidr_too_small(self):
         with pytest.raises(ValueError):

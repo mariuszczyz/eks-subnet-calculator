@@ -16,16 +16,17 @@ A browser-based tool to help SRE engineers and IT architects plan CIDR subnet al
 
 ### Running Locally
 
-1. **Install dependencies:**
+1. **Create a virtual environment and install dependencies:**
 
    ```bash
-   pip install -r requirements.txt
+   uv venv
+   uv pip install -r requirements.txt
    ```
 
 2. **Start the Flask development server:**
 
    ```bash
-   python app.py
+   uv run python app.py
    ```
 
    The server starts at `http://localhost:5555` by default. You'll see output like:

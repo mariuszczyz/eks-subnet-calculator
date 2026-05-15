@@ -13,7 +13,8 @@ def parse_cidr(cidr: str) -> ipaddress.IPv4Network:
         raise ValueError(f"Invalid CIDR format: {cidr}") from e
 
 
-def calculate_subnet_size(node_count: int, pods_per_node: int, availability_zones: int) -> int:
+def calculate_subnet_size(node_count: int, pods_per_node: int, availability_zones: int,
+                          use_custom_pod_cidr: bool = False) -> int:
     """
     Calculate the required per-AZ subnet size based on node and pod counts.
 
@@ -21,7 +22,11 @@ def calculate_subnet_size(node_count: int, pods_per_node: int, availability_zone
     """
     if availability_zones < 1:
         raise ValueError("availability_zones must be at least 1")
-    ips_per_az = node_count * pods_per_node / availability_zones + node_count * 16 / availability_zones + 128
+    if use_custom_pod_cidr:
+        # With custom networking, pods use an external CIDR; node subnets only need 1 primary IP per node.
+        ips_per_az = node_count / availability_zones + 128
+    else:
+        ips_per_az = node_count * pods_per_node / availability_zones + node_count * 16 / availability_zones + 128
 
     for prefix in range(24, 8, -1):
         subnet_size = 2 ** (32 - prefix)
@@ -43,6 +48,29 @@ def calculate_pod_cidr_size(node_count: int, pods_per_node: int) -> int:
 def calculate_control_plane_size() -> int:
     """AWS recommends minimum /28 for control plane subnets."""
     return 28
+
+
+def suggest_minimum_vpc_cidr(node_count: int, pods_per_node: int,
+                              availability_zones: int,
+                              use_custom_pod_cidr: bool = False) -> str:
+    """Return the smallest VPC prefix (e.g. '/13') that fits the cluster configuration."""
+    subnet_size = calculate_subnet_size(node_count, pods_per_node, availability_zones,
+                                        use_custom_pod_cidr=use_custom_pod_cidr)
+    subnet_ip_count = 2 ** (32 - subnet_size)
+
+    # Public + private node subnets + /28 control plane per AZ
+    total = availability_zones * (2 * subnet_ip_count + 16)
+    # Service CIDR /20 with one extra /20 block of alignment headroom
+    total += 2 * (2 ** (32 - 20))
+    # Auto pod CIDR is carved from VPC space; add 2× its size for alignment headroom
+    if not use_custom_pod_cidr:
+        pod_prefix = calculate_pod_cidr_size(node_count, pods_per_node)
+        total += 2 * (2 ** (32 - pod_prefix))
+
+    for prefix in range(28, 7, -1):
+        if 2 ** (32 - prefix) >= total:
+            return f"/{prefix}"
+    return "/8"
 
 
 def calculate_subnets(vpc_cidr: str, availability_zones: int,
@@ -74,14 +102,29 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             f"Need at least /{min_prefix} or larger."
         )
 
-    subnet_size = calculate_subnet_size(node_count, pods_per_node, availability_zones)
+    use_custom_pod_cidr = pod_cidr is not None
+    subnet_size = calculate_subnet_size(node_count, pods_per_node, availability_zones,
+                                        use_custom_pod_cidr=use_custom_pod_cidr)
     subnet_ip_count = 2 ** (32 - subnet_size)
+    suggested_cidr = suggest_minimum_vpc_cidr(node_count, pods_per_node, availability_zones,
+                                               use_custom_pod_cidr=use_custom_pod_cidr)
+
+    base_nodes_per_az = node_count // availability_zones
+    extra_nodes = node_count % availability_zones
+    available_per_subnet = subnet_ip_count - 3
+    if use_custom_pod_cidr:
+        max_nodes_per_subnet = max(0, available_per_subnet - 128)
+    else:
+        max_nodes_per_subnet = max(0, (available_per_subnet - 128) // (pods_per_node + 16))
+    max_pods_per_subnet = max_nodes_per_subnet * pods_per_node
 
     subnets = []
     current_address = vpc_network
 
     for az_num in range(1, availability_zones + 1):
         az_prefix = f"az{az_num}"
+        actual_nodes_this_az = base_nodes_per_az + (1 if az_num <= extra_nodes else 0)
+        actual_pods_this_az = actual_nodes_this_az * pods_per_node
 
         # Public subnet
         if current_address + subnet_ip_count > vpc_broadcast:
@@ -89,7 +132,8 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             raise ValueError(
                 f"Insufficient address space for AZ {az_num} {az_prefix}-public. "
                 f"Need {subnet_ip_count} IPs but only {vpc_broadcast - current_address + 1} available "
-                f"({total_needed} of {vpc_broadcast - vpc_network + 1} total VPC addresses consumed)"
+                f"({total_needed} of {vpc_broadcast - vpc_network + 1} total VPC addresses consumed). "
+                f"Consider using a {suggested_cidr} VPC CIDR to accommodate this cluster configuration."
             )
         public_subnet = ipaddress.IPv4Network(
             f"{ipaddress.IPv4Address(current_address)}/{subnet_size}", strict=False
@@ -100,6 +144,10 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             "purpose": "public",
             "total_ips": subnet_ip_count,
             "available_ips": subnet_ip_count - 3,
+            "actual_nodes": actual_nodes_this_az,
+            "actual_pods": actual_pods_this_az,
+            "max_nodes": max_nodes_per_subnet,
+            "max_pods": max_pods_per_subnet,
         })
         current_address += subnet_ip_count
 
@@ -109,7 +157,8 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             raise ValueError(
                 f"Insufficient address space for AZ {az_num} {az_prefix}-private. "
                 f"Need {subnet_ip_count} IPs but only {vpc_broadcast - current_address + 1} available "
-                f"({total_needed} of {vpc_broadcast - vpc_network + 1} total VPC addresses consumed)"
+                f"({total_needed} of {vpc_broadcast - vpc_network + 1} total VPC addresses consumed). "
+                f"Consider using a {suggested_cidr} VPC CIDR to accommodate this cluster configuration."
             )
         private_subnet = ipaddress.IPv4Network(
             f"{ipaddress.IPv4Address(current_address)}/{subnet_size}", strict=False
@@ -120,6 +169,10 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             "purpose": "private",
             "total_ips": subnet_ip_count,
             "available_ips": subnet_ip_count - 3,
+            "actual_nodes": actual_nodes_this_az,
+            "actual_pods": actual_pods_this_az,
+            "max_nodes": max_nodes_per_subnet,
+            "max_pods": max_pods_per_subnet,
         })
         current_address += subnet_ip_count
 
@@ -130,7 +183,8 @@ def calculate_subnets(vpc_cidr: str, availability_zones: int,
             raise ValueError(
                 f"Insufficient address space for AZ {az_num} {az_prefix}-control-plane. "
                 f"Need {cp_size} IPs but only {vpc_broadcast - current_address + 1} available "
-                f"({total_needed} of {vpc_broadcast - vpc_network + 1} total VPC addresses consumed)"
+                f"({total_needed} of {vpc_broadcast - vpc_network + 1} total VPC addresses consumed). "
+                f"Consider using a {suggested_cidr} VPC CIDR to accommodate this cluster configuration."
             )
         cp_subnet = ipaddress.IPv4Network(
             f"{ipaddress.IPv4Address(current_address)}/28", strict=False

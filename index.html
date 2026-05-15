@@ -198,8 +198,11 @@
             const subnetGrid = document.getElementById('subnetGrid');
             subnetGrid.innerHTML = data.subnets.map(s => {
                 const customBadge = s.custom ? ' <span style="font-size: 10px; background: #3b82f6; color: white; padding: 1px 6px; border-radius: 3px; margin-left: 4px;">Custom</span>' : '';
+                const nodePodsLine = (s.actual_nodes != null)
+                    ? `<div class="details">${s.actual_nodes} nodes • ${s.actual_pods} pods</div>`
+                    : '';
                 return `<div class="subnet-item"><h3><span class="color-indicator color-${s.purpose}"></span>${s.name}${customBadge}</h3>
-                <div class="cidr">${s.cidr}</div><div class="details">${s.total_ips} IPs • ${s.available_ips} available</div></div>`;
+                <div class="cidr">${s.cidr}</div><div class="details">${s.total_ips} IPs • ${s.available_ips} available</div>${nodePodsLine}</div>`;
             }).join('');
             const grouped = {};
             data.subnets.forEach(s => { if (!grouped[s.purpose]) grouped[s.purpose] = []; grouped[s.purpose].push(s); });

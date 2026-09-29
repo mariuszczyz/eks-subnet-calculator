@@ -148,15 +148,20 @@ class TestScenarioValues:
     def test_custom_networking_yields_higher_max_nodes(self):
         """For same az+networking+pods, custom networking yields higher max_nodes than auto."""
         result = subnet_planner.plan_scenarios("10.0.0.0/16")
+
+        def find_scenario(scenarios, az_count, pods_per_node, networking):
+            """Helper to find a scenario by matching criteria."""
+            return next(
+                s for s in scenarios if (s["az_count"] == az_count
+                                         and s["pods_per_node"] == pods_per_node
+                                         and s["networking"] == networking)
+            )
+
         # Group by (az_count, pods_per_node) and compare auto vs custom
         for az in [1, 2, 3, 4, 5, 6]:
             for pods in [25, 50, 110, 250]:
-                auto = next(s for s in result["scenarios"] if (s["az_count"] == az and
-                                                        s["pods_per_node"] == pods and
-                                                        s["networking"] == "auto"))
-                custom = next(s for s in result["scenarios"] if (s["az_count"] == az and
-                                                        s["pods_per_node"] == pods and
-                                                        s["networking"] == "custom"))
+                auto = find_scenario(result["scenarios"], az, pods, "auto")
+                custom = find_scenario(result["scenarios"], az, pods, "custom")
                 assert custom["max_nodes"] >= auto["max_nodes"]
 
 
@@ -191,20 +196,24 @@ class TestMonotonicity:
 
     def test_larger_vpc_yields_higher_max_nodes(self):
         """A /16 VPC yields max_nodes >= a /20 VPC for same az+networking+pods."""
+
+        def find_matching_20(scenario_16, r_20):
+            """Find matching /20 scenario for a /16 scenario by az, networking, pods."""
+            for s_20 in r_20["scenarios"]:
+                if (
+                    s_20["az_count"] == s_16["az_count"]
+                    and s_20["networking"] == s_16["networking"]
+                    and s_20["pods_per_node"] == s_16["pods_per_node"]
+                ):
+                    return s_20
+            return None
+
         # Get max_nodes from /16 and /20 for each combination
         r_16 = subnet_planner.plan_scenarios("10.0.0.0/16")
         r_20 = subnet_planner.plan_scenarios("10.0.0.0/20")
 
         for s_16 in r_16["scenarios"]:
-            # Find matching scenario in /20 (same az, networking, pods)
-            matching_20 = None
-            for s_20 in r_20["scenarios"]:
-                if (s_20["az_count"] == s_16["az_count"] and
-                    s_20["networking"] == s_16["networking"] and
-                    s_20["pods_per_node"] == s_16["pods_per_node"]):
-                    matching_20 = s_20
-                    break
-
+            matching_20 = find_matching_20(s_16, r_20)
             if matching_20 is not None:
                 assert s_16["max_nodes"] >= matching_20["max_nodes"]
 

@@ -60,7 +60,7 @@ A browser-based tool to help SRE engineers and IT architects plan CIDR subnet al
 
 5. **Use the EKS Subnet Planner:**
 
-   Navigate to `http://localhost:5555/planner` and enter a VPC CIDR (e.g., `10.0.0.0/16`) to see all cluster scenarios that fit inside your VPC.
+   Navigate to `http://localhost:5555/planner` and enter a VPC CIDR (e.g., `10.0.0.0/16`) to see cluster scenarios grouped by availability-zone count, with each group showing cards for the number of configurations that fit.
 
    ```bash
    curl -X POST http://localhost:5555/api/plan \
@@ -131,11 +131,10 @@ The planner returns a JSON object with scenario enumeration:
 }
 ```
 
-**Scenario table columns:**
+**Scenario table columns (per group card):**
 
 | Column | Description |
 |--------|-------------|
-| AZs | Number of availability zones (1-6) |
 | Networking | Pod CIDR mode: `auto` (Kubernetes-managed within VPC) or `custom` (external CG-NAT) |
 | Pods/Node | Pods per node configuration (25, 50, 110, or 250) |
 | Max Nodes | Maximum worker nodes that fit within the VPC for this scenario |
@@ -174,8 +173,10 @@ The planner provides a reverse-engineering view: given only a VPC CIDR, it deter
 **How it works:**
 1. Accepts any valid IPv4 prefix from /8 through /28
 2. Enumerates 48 scenarios (6 AZs × 2 networking modes × 4 pods-per-node options)
-3. For each scenario, calculates maximum nodes that fit within the VPC
-4. Returns scenarios sorted by VPC utilization (%), then AZs, then max nodes
+3. Groups results by AZ count (ascending: 1, 2, 3...) with per-group cards
+4. Each group shows cards for the number of configurations that fit (8 options per AZ tier)
+5. Inside each group, a table displays scenarios sorted by VPC utilization (%), then max nodes
+6. Group headers use labels: "1 AZ — Single-AZ, non-HA" (HA badge), "2 AZs — Highly available control plane" (HA badge), "3+ AZs — Full regional resilience" (Full Resilience badge)
 
 **Use cases:**
 - Planning capacity before committing to a VPC allocation

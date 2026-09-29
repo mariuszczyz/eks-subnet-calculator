@@ -62,11 +62,19 @@
         .summary-item { background: var(--bg); padding: 12px; border-radius: 6px; }
         .summary-item .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
         .summary-item .value { font-size: 18px; font-weight: 700; color: var(--text); }
+        .site-nav { position: absolute; top: 28px; right: 24px; display: flex; gap: 16px; }
+        .site-nav a { font-size: 14px; font-weight: 500; color: var(--text-secondary); text-decoration: none; }
+        .site-nav a:hover { color: var(--primary); }
+        .site-nav a.active { color: var(--primary); font-weight: 600; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
+            <nav class="site-nav">
+                <a href="/" class="active">Calculator</a>
+                <a href="/planner">Planner</a>
+            </nav>
             <h1>EKS Subnet Calculator</h1>
             <p class="subtitle">Plan CIDR subnet allocations for AWS EKS clusters</p>
         </header>

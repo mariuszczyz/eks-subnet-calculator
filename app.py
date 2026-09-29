@@ -3,6 +3,7 @@
 
 from flask import Flask, jsonify, request, send_from_directory
 import subnet_calculator
+import subnet_planner
 import validators
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -11,6 +12,11 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
+
+
+@app.route('/planner')
+def planner():
+    return send_from_directory('.', 'planner.html')
 
 
 @app.route('/api/calculate', methods=['POST'])
@@ -42,6 +48,21 @@ def calculate():
             eks_version=eks_version,
             pod_cidr=pod_cidr,
         )
+        return jsonify(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception:
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/plan', methods=['POST'])
+def plan():
+    try:
+        is_valid, error = validators.is_valid_vpc_cidr(request.json.get('vpc_cidr'))
+        if not is_valid:
+            return jsonify({'error': error}), 400
+
+        data = subnet_planner.plan_scenarios(request.json.get('vpc_cidr'))
         return jsonify(data)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400

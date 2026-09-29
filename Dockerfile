@@ -4,8 +4,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py subnet_calculator.py validators.py .
-COPY index.html .
+COPY app.py subnet_calculator.py subnet_planner.py validators.py .
+COPY index.html planner.html .
 
 EXPOSE 8080
 
